@@ -1,7 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
-// Replace these with the strings from your screenshots
-const supabaseUrl = 'https://zvnlhanaqjsxszspvhpe.supabase.co';
-const supabaseAnonKey = 'YOUR_PUBLISHABLE_KEY_FROM_SCREENSHOT'; 
+// These lines pull the secret keys from your .env file
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)

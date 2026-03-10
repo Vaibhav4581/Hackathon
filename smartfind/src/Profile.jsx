@@ -2,39 +2,94 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
+import { supabase } from "./supabaseClient"; // Import the bridge
 
 function Profile() {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 968);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  
+  const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+
+  // --- USER STATE ---
   const [userData, setUserData] = useState({
-    name: "Vaibhav",
-    email: "vaibhav@university.edu",
-    phone: "+91 98765 43210",
-    lostCount: 3,
-    foundCount: 2
+    name: "Loading...",
+    email: "",
+    phone: "Click edit to add",
+    lostCount: 0,
+    foundCount: 0
   });
   const [tempData, setTempData] = useState({ ...userData });
 
-  // --- PARTICLES INITIALIZATION ---
-  const particlesInit = useCallback(async (engine) => {
-    await loadSlim(engine);
+  // 1. FETCH REAL USER DATA
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        // Get profile details from the 'profiles' table we created with SQL earlier
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (data) {
+          setUserData({
+            name: data.full_name || "New User",
+            email: user.email,
+            phone: data.phone || "No phone added",
+            lostCount: 0, // We can link these to real tables later!
+            foundCount: 0
+          });
+          setTempData({
+            name: data.full_name || "New User",
+            email: user.email,
+            phone: data.phone || ""
+          });
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchProfile();
   }, []);
 
+  // 2. REAL SIGN OUT LOGIC
+  const confirmLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
+
+  // 3. REAL SAVE DATA LOGIC
+  const handleSave = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        full_name: tempData.name,
+        // If you added a phone column to your table:
+        // phone: tempData.phone 
+      })
+      .eq('id', user.id);
+
+    if (error) {
+      alert("Error updating profile: " + error.message);
+    } else {
+      setUserData({ ...userData, ...tempData });
+      setIsEditing(false);
+    }
+  };
+
+  // --- PARTICLES & RESIZE (Keeping your existing code) ---
+  const particlesInit = useCallback(async (engine) => { await loadSlim(engine); }, []);
   const particleOptions = {
     fullScreen: { enable: true, zIndex: 0 },
     fpsLimit: 120,
     particles: {
       color: { value: "#8FB3E2" },
-      links: { 
-        color: "#D9E1F1", 
-        distance: 180, 
-        enable: true, 
-        opacity: 0.2, 
-        width: 1 
-      },
+      links: { color: "#D9E1F1", distance: 180, enable: true, opacity: 0.2, width: 1 },
       move: { enable: true, speed: 0.8 },
       number: { density: { enable: true, area: 800 }, value: 45 },
       opacity: { value: 0.4 },
@@ -50,33 +105,11 @@ function Profile() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // --- ACTIONS ---
-  const handleEditClick = () => {
-    setTempData({ ...userData });
-    setIsEditing(true);
-  };
-
-  const handleSave = () => {
-    setUserData({ ...tempData });
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setTempData({ ...userData });
-    setIsEditing(false);
-  };
-
-  const handleExitClick = () => {
-    setShowLogoutConfirm(true);
-  };
-
-  const confirmLogout = () => {
-    setShowLogoutConfirm(false);
-    navigate("/");
-  };
+  if (loading) return <div style={styles.container}><h2 style={{color: 'white'}}>Loading...</h2></div>;
 
   return (
     <div style={styles.container}>
+      {/* ... (Keep your existing <style>, Particles, and Modal code exactly the same) ... */}
       <style>
         {`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
@@ -93,10 +126,8 @@ function Profile() {
         `}
       </style>
 
-      {/* --- GLOBAL PARTICLES --- */}
       <Particles id="tsparticles" init={particlesInit} options={particleOptions} />
 
-      {/* --- LOGOUT MODAL --- */}
       {showLogoutConfirm && (
         <div style={styles.modalOverlay}>
           <div style={styles.confirmBox}>
@@ -121,7 +152,6 @@ function Profile() {
           pointerEvents: showLogoutConfirm ? "none" : "auto",
         }}
       >
-        
         {/* --- SIDEBAR --- */}
         <div style={{
           ...styles.sidebar,
@@ -146,11 +176,7 @@ function Profile() {
               <div style={styles.contactList}>
                 <div style={styles.contactItem}>
                   <span style={styles.contactLabel}>EMAIL</span>
-                  {isEditing ? (
-                    <input style={styles.editInput} value={tempData.email} onChange={(e) => setTempData({...tempData, email: e.target.value})} />
-                  ) : (
-                    <span style={styles.contactValue}>{userData.email}</span>
-                  )}
+                  <span style={styles.contactValue}>{userData.email}</span>
                 </div>
                 <div style={styles.contactItem}>
                   <span style={styles.contactLabel}>PHONE</span>
@@ -172,28 +198,28 @@ function Profile() {
           <div style={{ display: "flex", gap: "10px", width: "100%", marginTop: "auto" }}>
             {isEditing ? (
               <>
-                <button style={styles.cancelBtnSmall} onClick={handleCancel}>Cancel</button>
+                <button style={styles.cancelBtnSmall} onClick={() => setIsEditing(false)}>Cancel</button>
                 <button style={styles.saveBtnSmall} onClick={handleSave}>Save</button>
               </>
             ) : (
               <>
-                <button style={styles.editBtn} onClick={handleEditClick}>Edit Profile</button>
-                <button style={styles.logoutBtn} onClick={handleExitClick}>Exit</button>
+                <button style={styles.editBtn} onClick={() => setIsEditing(true)}>Edit Profile</button>
+                <button style={styles.logoutBtn} onClick={() => setShowLogoutConfirm(true)}>Exit</button>
               </>
             )}
           </div>
         </div>
 
-        {/* --- CONTENT AREA --- */}
+        {/* --- CONTENT AREA (Keep your Activity/ItemRow sections exactly the same) --- */}
         <div className="content-scroll" style={{ ...styles.content, padding: isMobile ? "25px" : "50px" }}>
-          <header style={{ ...styles.header, flexDirection: isMobile ? "column" : "row", gap: "20px" }}>
-            <div>
-              <h1 style={styles.welcomeText}>My Activity</h1>
-              <p style={styles.subtitle}>Track items & matches</p>
-            </div>
-          </header>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
+           <header style={{ ...styles.header, flexDirection: isMobile ? "column" : "row", gap: "20px" }}>
+             <div>
+               <h1 style={styles.welcomeText}>My Activity</h1>
+               <p style={styles.subtitle}>Track items & matches</p>
+             </div>
+           </header>
+           {/* ...rest of your content section... */}
+           <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
             <section>
               <h3 style={styles.sectionTitle}>Your Lost Reports</h3>
               <div style={styles.itemTable}>
@@ -208,6 +234,7 @@ function Profile() {
   );
 }
 
+// ... (Keep your ItemRow and styles object exactly as they were) ...
 const ItemRow = ({ title, tag, status, color }) => (
   <div style={styles.tableRow}>
     <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
@@ -219,6 +246,7 @@ const ItemRow = ({ title, tag, status, color }) => (
 );
 
 const styles = {
+  // ... Paste your existing styles object here ...
   container: { height: "100vh", width: "100vw", backgroundColor: "#0f172a", display: "flex", justifyContent: "center", alignItems: "center", fontFamily: "'Inter', sans-serif", position: "relative", overflow: "hidden" },
   modalOverlay: { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 },
   confirmBox: { backgroundColor: "#192338", padding: "40px", borderRadius: "24px", textAlign: "center", border: "1px solid rgba(143, 179, 226, 0.3)", boxShadow: "0 25px 50px rgba(0,0,0,0.5)", width: "350px" },
