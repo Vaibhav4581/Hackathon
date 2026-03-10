@@ -2,13 +2,19 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
+import { supabase } from "./supabaseClient"; // Make sure this path is correct!
 
 const Auth = () => {
   const [active, setActive] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 850);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // --- Particles Initialization (Optional if already in App.jsx, but good for local testing) ---
+  // --- AUTH STATES ---
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+
   const particlesInit = useCallback(async (engine) => {
     await loadSlim(engine);
   }, []);
@@ -40,10 +46,42 @@ const Auth = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleSubmit = (e) => {
+  // --- UPDATED SUBMIT LOGIC ---
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Redirecting to Home...");
-    navigate("/home");
+    setLoading(true);
+
+    if (active) {
+      // REGISTER LOGIC
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+
+      if (error) {
+        alert(error.message);
+      } else {
+        alert("Success! Check your email for a confirmation link.");
+      }
+    } else {
+      // LOGIN LOGIC
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        alert(error.message);
+      } else {
+        navigate("/home");
+      }
+    }
+    setLoading(false);
   };
 
   return (
@@ -67,10 +105,8 @@ const Auth = () => {
         `}
       </style>
       
-      {/* Background Particles Layer (Matches Lost/Found) */}
       <Particles id="tsparticles" init={particlesInit} options={particleOptions} />
 
-      {/* Main Content Layer - Set to zIndex 10 to be on top of particles */}
       <div 
         className="auth-card-blur"
         style={{
@@ -97,10 +133,32 @@ const Auth = () => {
         >
           <h2 style={styles.title}>{isMobile ? "Register" : "Create Account"}</h2>
           <form onSubmit={handleSubmit} style={styles.form}>
-            <input style={styles.input} placeholder="Full Name" required />
-            <input style={styles.input} placeholder="Email" type="email" required />
-            <input style={styles.input} type="password" placeholder="Password" required />
-            <button style={styles.button}>SIGN UP</button>
+            <input 
+              style={styles.input} 
+              placeholder="Full Name" 
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required 
+            />
+            <input 
+              style={styles.input} 
+              placeholder="Email" 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required 
+            />
+            <input 
+              style={styles.input} 
+              type="password" 
+              placeholder="Password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required 
+            />
+            <button style={styles.button} disabled={loading}>
+              {loading ? "PROCESSING..." : "SIGN UP"}
+            </button>
           </form>
           {isMobile && (
             <p style={styles.mobileSwitch} onClick={() => setActive(false)}>
@@ -124,10 +182,26 @@ const Auth = () => {
         >
           <h2 style={styles.title}>Welcome Back</h2>
           <form onSubmit={handleSubmit} style={styles.form}>
-            <input style={styles.input} placeholder="Email" type="email" required />
-            <input style={styles.input} type="password" placeholder="Password" required />
+            <input 
+              style={styles.input} 
+              placeholder="Email" 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required 
+            />
+            <input 
+              style={styles.input} 
+              type="password" 
+              placeholder="Password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required 
+            />
             <p style={styles.forgotPass}>Forgot your password?</p>
-            <button style={styles.button}>SIGN IN</button>
+            <button style={styles.button} disabled={loading}>
+              {loading ? "AUTHENTICATING..." : "SIGN IN"}
+            </button>
           </form>
           {isMobile && (
             <p style={styles.mobileSwitch} onClick={() => setActive(true)}>
@@ -164,20 +238,21 @@ const Auth = () => {
   );
 };
 
+// ... keep your existing styles object below this ...
 const styles = {
   container: {
     height: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background: "transparent", // Set to transparent to see the global particles
+    background: "transparent",
     overflow: "hidden",
     fontFamily: "'Inter', sans-serif",
     position: "relative",
   },
   mainContainer: {
     position: "relative",
-    background: "rgba(30, 46, 79, 0.4)", // Reduced opacity for stronger glass effect
+    background: "rgba(30, 46, 79, 0.4)",
     borderRadius: "24px",
     overflow: "hidden",
     boxShadow: "0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(143, 179, 226, 0.1)",
@@ -211,7 +286,7 @@ const styles = {
   input: {
     width: "100%",
     padding: "14px 18px",
-    background: "rgba(49, 72, 122, 0.3)", // Even more transparent inputs
+    background: "rgba(49, 72, 122, 0.3)",
     border: "1px solid rgba(143, 179, 226, 0.2)",
     borderRadius: "12px",
     color: "white",
