@@ -1,3 +1,25 @@
+/* 1. Tailwind Base Imports (Top) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. Global Resets */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #192338;
+  /* Allows vertical scrolling but prevents horizontal shaking */
+  overflow-x: hidden; 
+  min-height: 100vh;
+  color: #D9E1F1;
+  font-family: 'Inter', sans-serif;
+}
+
+/* 3. Custom Animations */
 @keyframes fade {
   from {
     opacity: 0;
@@ -5,5 +27,23 @@
   }
   to {
     opacity: 1;
+    transform: translateY(0); /* Added this to ensure it lands perfectly */
   }
+}
+
+/* 4. Custom Utility Class */
+.animate-fade {
+  animation: fade 0.6s ease-out forwards;
+}
+
+/* 5. Scrollbar Styling (Optional but makes it look AI-Premium) */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #192338;
+}
+::-webkit-scrollbar-thumb {
+  background: #31487A;
+  border-radius: 10px;
 }
