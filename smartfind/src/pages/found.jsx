@@ -69,30 +69,57 @@ const Found = () => {
 
   const submitToSupabase = async () => {
     try {
-      const { data, error } = await supabase
-        .from('items')
-        .insert([
-          { 
-            title: formData.title,
-            type: formData.type,
-            color: formData.color,
-            location: formData.location,
-            time: formData.time,
-            status: 'found' 
-          }
-        ]);
+      // 1. Prepare FormData
+      const formDataToSend = new FormData();
+      
+      // Merge details for the AI Backend
+      const combinedDescription = `${formData.title} (${formData.color}) found at ${formData.location}`;
+      formDataToSend.append("description", combinedDescription);
+      formDataToSend.append("type", "found");
 
-      if (error) throw error;
-      nextStep(); 
+      // 2. Get Real User Email (Crucial for original person to get email)
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        alert("Please log in first. We need your email to notify you and the owner!");
+        return;
+      }
+      
+      formDataToSend.append("email", user.email);
+
+      if (formData.image) {
+        formDataToSend.append("image", formData.image);
+      }
+
+      // 3. Post to the Python AI Backend
+      const response = await fetch("http://127.0.0.1:8000/upload", {
+        method: "POST",
+        body: formDataToSend,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        console.log("AI Match Result:", result);
+        
+        // If the AI finds a matching 'Lost' report
+        if (result.status === "item_found") {
+          alert(`🚀 AI MATCH FOUND! An email has been sent to the owner: ${result.match_details.email}`);
+        }
+        
+        nextStep(); 
+      } else {
+        throw new Error(result.message || "AI Server error");
+      }
+
     } catch (error) {
-      console.error("Database Error:", error.message);
-      alert("Submission failed: " + error.message);
+      console.error("Submission Error:", error.message);
+      alert("Error: AI Backend is offline. Run 'python -m uvicorn main:app --reload' in your terminal.");
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 relative overflow-hidden">
-      {/* Background Particles Layer */}
       <Particles id="tsparticles" init={particlesInit} options={particleOptions} />
 
       <AnimatePresence mode="wait">
