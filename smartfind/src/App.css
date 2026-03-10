@@ -1,0 +1,213 @@
+/* Color Palette Variables */
+:root {
+  --oxford-blue: #192338;
+  --space-cadet: #1E2E4F;
+  --yinmn-blue: #31487A;
+  --jordy-blue: #8FB3E2;
+  --lavender: #D9E1F1;
+  
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--oxford-blue);
+  overflow-x: hidden;
+  line-height: 1.6;
+  color: var(--lavender);
+}
+
+/* --- Particles Layer --- */
+#tsparticles {
+  position: fixed !important;
+  inset: 0;
+  z-index: 0; 
+  pointer-events: none;
+}
+
+/* --- Container --- */
+.app-container {
+  background: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Global Navbar --- */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 5%;
+  background: transparent;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-bottom: 1px solid rgba(143, 179, 226, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.nav-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  text-decoration: none;
+}
+
+.nav-logo-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--jordy-blue);
+  filter: drop-shadow(0 0 5px rgba(143, 179, 226, 0.3));
+}
+
+.logo-text {
+  font-size: 1.4rem;
+  font-weight: 900;
+  letter-spacing: -1.2px;
+  color: var(--lavender);
+  text-decoration: none;
+}
+
+.profile-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(143, 179, 226, 0.05);
+  border: 1px solid rgba(143, 179, 226, 0.2);
+  color: var(--jordy-blue);
+  transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Hero Section --- */
+.hero-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  min-height: 80vh;
+}
+
+.glass-card {
+  background: rgba(30, 46, 79, 0.4);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(143, 179, 226, 0.1);
+  padding: 3.5rem 2.5rem;
+  border-radius: 3rem;
+  max-width: 850px;
+  width: 95%;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+}
+
+.title {
+  font-size: clamp(2.5rem, 7vw, 4rem);
+  font-weight: 900;
+  color: var(--lavender);
+  margin-bottom: 1rem;
+  line-height: 1.1;
+}
+
+.highlight {
+  color: var(--jordy-blue);
+}
+
+.subtitle {
+  color: rgba(217, 225, 241, 0.7);
+  font-size: 1.1rem;
+  margin-bottom: 3rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --- Button Group (The Fix for your Image) --- */
+.button-group {
+  display: flex;
+  gap: 1.5rem; /* Creates the gap between the boxes */
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap; /* Allows stacking on mobile */
+  margin-top: 2rem;
+}
+
+.btn {
+  padding: 1.1rem 2.2rem;
+  border-radius: 1.2rem;
+  font-weight: 800;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.9rem;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  min-width: 220px; /* Makes them "Neat Boxes" of equal size */
+  display: inline-block;
+}
+
+.btn-primary {
+  background-color: var(--jordy-blue);
+  color: var(--oxford-blue);
+  border: none;
+  box-shadow: 0 10px 25px rgba(143, 179, 226, 0.2);
+}
+
+.btn-secondary {
+  background: rgba(143, 179, 226, 0.05);
+  color: var(--jordy-blue);
+  border: 2px solid var(--jordy-blue);
+}
+
+.btn:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+  filter: brightness(1.1);
+}
+
+.browse-link {
+  display: inline-block;
+  margin-top: 2rem;
+  color: var(--jordy-blue);
+  text-decoration: none;
+  font-weight: 600;
+  opacity: 0.8;
+  transition: 0.3s;
+}
+
+.browse-link:hover {
+  opacity: 1;
+  letter-spacing: 1px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: rgba(143, 179, 226, 0.1);
+  border: 1px solid rgba(143, 179, 226, 0.2);
+  border-radius: 50px;
+  color: var(--jordy-blue);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 1.5rem;
+}
+
+/* --- Removed Stats Container Logic --- */
+/* The .stats-container, .stat-number, and .divider classes have been removed */
+
+@media (max-width: 768px) {
+  .navbar { padding: 1rem 5%; }
+  .btn { width: 100%; }
+}

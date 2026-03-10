@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+supabase
+torch
+sentence-transformers
+pillow
+scikit-learn
+python-multipart
