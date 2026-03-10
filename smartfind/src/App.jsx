@@ -1,17 +1,16 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Login from "./components/Login";
+import Profile from "./components/Profile";
+
 
 function App() {
   return (
-    <div>
-      <h1>SmartFind - AI Lost & Found</h1>
-      <p>Report lost items and help others recover their belongings.</p>
-
-      <button>Report Lost Item</button>
-      <button>Report Found Item</button>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/profile" element={<Profile />} />
+      </Routes>
+    </Router>
   );
 }
 

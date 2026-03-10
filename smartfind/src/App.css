@@ -1,42 +1,79 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+body{
+  margin:0;
+  font-family: Arial, Helvetica, sans-serif;
+  background-color:#192338;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* page center */
+
+.login-container{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* login card */
+
+.login-card{
+  background:#1E2E4F;
+  padding:40px;
+  border-radius:12px;
+  width:320px;
+  text-align:center;
+  box-shadow:0px 10px 30px rgba(0,0,0,0.5);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+/* title */
+
+.title{
+  color:#D9E1F1;
+  margin-bottom:5px;
 }
 
-.card {
-  padding: 2em;
+.subtitle{
+  color:#8FB3E2;
+  font-size:14px;
+  margin-bottom:25px;
 }
 
-.read-the-docs {
-  color: #888;
+/* inputs */
+
+.input-field{
+  width:100%;
+  padding:12px;
+  margin-bottom:15px;
+  border:none;
+  border-radius:6px;
+  background:#31487A;
+  color:white;
+}
+
+.input-field::placeholder{
+  color:#D9E1F1;
+}
+
+.input-field:focus{
+  outline:none;
+  background:#8FB3E2;
+  color:#192338;
+}
+
+/* button */
+
+.login-button{
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:6px;
+  background:#31487A;
+  color:white;
+  font-size:16px;
+  cursor:pointer;
+  transition:0.3s;
+}
+
+.login-button:hover{
+  background:#8FB3E2;
+  color:#192338;
 }
