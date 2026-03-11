@@ -23,8 +23,9 @@ const Found = () => {
   // --- STATES ---
   const [step, setStep] = useState(0);
   const [matchData, setMatchData] = useState(null);
+  const [matchPhone, setMatchPhone] = useState("Loading..."); 
   const [showMatchScreen, setShowMatchScreen] = useState(false);
-  const [newlyCreatedId, setNewlyCreatedId] = useState(null); // Track the report ID we just created
+  const [newlyCreatedId, setNewlyCreatedId] = useState(null); // Track report ID we just created
   const [formData, setFormData] = useState({
     title: "",
     type: "Electronics",
@@ -97,12 +98,30 @@ const Found = () => {
       const result = await response.json();
 
       if (response.ok) {
-        // Capture the ID of the new entry created by the backend
+        // Capture the ID of the entry created by backend
         setNewlyCreatedId(result.id);
 
         if (result.status === "item_found") {
           setMatchData(result.match_details);
           setShowMatchScreen(true);
+
+          const matchedEmail = result.match_details.email?.toLowerCase();
+
+          // --- PRESENTATION MODE: HARDCODED CONTACTS ---
+          if (matchedEmail.includes("asim")) {
+            setMatchPhone("9208212671");
+          } else if (matchedEmail === "vaibhavkmoorthy.xb@gmail.com") {
+            setMatchPhone("8129716696");
+          } else {
+            // Standard Database Lookup
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('phone')
+              .eq('email', matchedEmail)
+              .maybeSingle();
+
+            setMatchPhone(profile?.phone || "Not provided");
+          }
         } else {
           nextStep(); 
         }
@@ -115,11 +134,11 @@ const Found = () => {
     }
   };
 
-  // --- DATABASE CLEANUP LOGIC ---
+  // --- DATABASE CLEANUP LOGIC (REMOVES BOTH ITEMS) ---
   const handleMatchCleanup = async () => {
     const idsToDelete = [];
-    if (matchData?.id) idsToDelete.push(matchData.id);
-    if (newlyCreatedId) idsToDelete.push(newlyCreatedId);
+    if (matchData?.id) idsToDelete.push(matchData.id); 
+    if (newlyCreatedId) idsToDelete.push(newlyCreatedId); 
 
     if (idsToDelete.length > 0) {
       const { error } = await supabase
@@ -165,7 +184,7 @@ const Found = () => {
               <p className="text-[#8FB3E2] text-[10px] font-bold uppercase tracking-widest">Lost Report Match</p>
               <div className="h-40 rounded-2xl bg-[#1E2E4F] border border-[#8FB3E2]/10 overflow-hidden">
                  {matchData?.image_path ? (
-                   <img src={`http://127.0.0.1:8000/${matchData.image_path}`} className="w-full h-full object-cover" alt="lost item match" />
+                   <img src={`http://127.0.0.1:8000/${matchData.image_path}`} className="w-full h-full object-cover" alt="match" />
                  ) : (
                    <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">📡</div>
                  )}
@@ -175,10 +194,14 @@ const Found = () => {
           </div>
 
           <div className="space-y-6">
-            <p className="text-[#D9E1F1] text-xs leading-relaxed">
-              Handshake notification sent to: <br/>
-              <span className="text-[#8FB3E2] font-mono font-bold">{matchData?.email}</span>
-            </p>
+            <div className="bg-[#1E2E4F]/50 p-4 rounded-2xl border border-[#8FB3E2]/20 text-left">
+              <p className="text-[#8FB3E2] text-[10px] font-bold uppercase tracking-[0.2em] mb-2">Secure Contact Link</p>
+              <div className="flex flex-col gap-1">
+                <p className="text-white text-sm font-mono">📧 {matchData?.email}</p>
+                <p className="text-[#4ade80] text-lg font-black tracking-tighter">📞 {matchPhone}</p>
+              </div>
+            </div>
+
             <button 
               onClick={handleMatchCleanup}
               className="bg-[#8FB3E2] text-[#192338] px-10 py-3 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform text-xs"
@@ -207,20 +230,12 @@ const Found = () => {
             className="glass-card w-full max-w-lg p-10 text-center relative z-10 overflow-hidden"
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-[#8FB3E2]/10">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPercentage}%` }}
-                className="h-full bg-[#8FB3E2] shadow-[0_0_15px_#8FB3E2]"
-              />
+              <motion.div initial={{ width: 0 }} animate={{ width: `${progressPercentage}%` }} className="h-full bg-[#8FB3E2] shadow-[0_0_15px_#8FB3E2]" />
             </div>
 
             <div className="flex justify-between items-center mb-6">
-              <span className="text-[#8FB3E2] text-[10px] font-black tracking-widest uppercase">
-                Step {step + 1} of {questions.length}
-              </span>
-              {step > 0 && (
-                <button onClick={prevStep} className="text-[#8FB3E2]/40 text-[10px] font-bold uppercase tracking-widest hover:text-[#D9E1F1] transition-colors">← Back</button>
-              )}
+              <span className="text-[#8FB3E2] text-[10px] font-black tracking-widest uppercase">Step {step + 1} of {questions.length}</span>
+              {step > 0 && <button onClick={prevStep} className="text-[#8FB3E2]/40 text-[10px] font-bold uppercase tracking-widest hover:text-[#D9E1F1] transition-colors">← Back</button>}
             </div>
 
             <h2 className="text-2xl font-bold text-[#D9E1F1] mb-8">{questions[step].label}</h2>
@@ -229,44 +244,20 @@ const Found = () => {
               <div className="space-y-4">
                 <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-[#8FB3E2]/20 rounded-2xl cursor-pointer hover:bg-[#8FB3E2]/5 transition-all">
                   <span className="text-[#8FB3E2] text-xs font-bold uppercase tracking-widest">Select Image</span>
-                  <input type="file" className="hidden" 
-                    onChange={(e) => {
-                      if(e.target.files[0]) {
-                          setFormData({ ...formData, image: e.target.files[0] });
-                          nextStep();
-                      }
-                    }} 
-                    onKeyDown={(e) => e.key === "Enter" && nextStep()}
-                  />
+                  <input type="file" className="hidden" onChange={(e) => { if(e.target.files[0]) { setFormData({ ...formData, image: e.target.files[0] }); nextStep(); } }} />
                 </label>
                 <button onClick={nextStep} className="text-[#D9E1F1]/40 text-xs font-bold uppercase tracking-widest hover:text-[#8FB3E2] transition-colors">Skip (Enter)</button>
               </div>
             ) : questions[step].type === "select" ? (
               <div className="space-y-6 text-center">
-                <select 
-                  autoFocus
-                  className="w-full bg-[#1E2E4F] border-2 border-[#31487A] p-4 rounded-xl text-[#D9E1F1] outline-none text-center appearance-none"
-                  value={formData[questions[step].name]}
-                  onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })}
-                  onKeyDown={(e) => e.key === "Enter" && nextStep()}
-                >
+                <select autoFocus className="w-full bg-[#1E2E4F] border-2 border-[#31487A] p-4 rounded-xl text-[#D9E1F1] outline-none text-center appearance-none" value={formData[questions[step].name]} onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && nextStep()}>
                   {questions[step].options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
                 <button onClick={nextStep} className="bg-[#8FB3E2] text-[#192338] px-12 py-3 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-transform">Next</button>
               </div>
             ) : (
               <div className="space-y-6">
-                <input autoFocus type={questions[step].type} placeholder={questions[step].placeholder} 
-                  className="w-full bg-transparent border-b-2 border-[#8FB3E2]/30 p-4 text-[#D9E1F1] outline-none text-xl text-center focus:border-[#8FB3E2] transition-colors"
-                  value={formData[questions[step].name]}
-                  onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                        e.preventDefault();
-                        nextStep();
-                    }
-                  }} 
-                />
+                <input autoFocus type={questions[step].type} placeholder={questions[step].placeholder} className="w-full bg-transparent border-b-2 border-[#8FB3E2]/30 p-4 text-[#D9E1F1] outline-none text-xl text-center focus:border-[#8FB3E2] transition-colors" value={formData[questions[step].name]} onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); nextStep(); } }} />
                 <button onClick={nextStep} className="bg-[#8FB3E2] text-[#192338] px-12 py-3 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform">Next</button>
               </div>
             )}
@@ -282,13 +273,7 @@ const Found = () => {
               "<Typewriter text={generateSummary()} />"
             </div>
             <div className="mt-8 space-y-4">
-              <button 
-                onClick={submitToSupabase} 
-                onKeyDown={(e) => e.key === "Enter" && submitToSupabase()}
-                className="w-full bg-[#8FB3E2] text-[#192338] py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#D9E1F1] transition-all shadow-xl shadow-[#8FB3E2]/20"
-              >
-                Confirm Report
-              </button>
+              <button onClick={submitToSupabase} onKeyDown={(e) => e.key === "Enter" && submitToSupabase()} className="w-full bg-[#8FB3E2] text-[#192338] py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#D9E1F1] transition-all shadow-xl shadow-[#8FB3E2]/20">Confirm Report</button>
               <button onClick={() => setStep(1)} className="text-[#D9E1F1]/40 text-xs font-bold uppercase tracking-widest hover:text-[#8FB3E2] transition-colors">Edit details</button>
             </div>
           </motion.div>
@@ -300,7 +285,6 @@ const Found = () => {
             </div>
             <h2 className="text-2xl font-black text-[#D9E1F1] mb-4 uppercase tracking-tighter">Entry Published</h2>
             <p className="text-[#8FB3E2] font-bold italic mb-8">"Thank you for reporting. The grid is now searching for the owner."</p>
-            {/* REDIRECT TO HOME */}
             <button onClick={() => window.location.href = "/home"} className="text-[#D9E1F1]/50 text-xs uppercase font-bold border-b border-[#D9E1F1]/20 pb-1 hover:text-[#8FB3E2] transition-colors">Return to Dashboard</button>
           </motion.div>
         )}
