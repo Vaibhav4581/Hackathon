@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
-import { supabase } from "./supabaseClient"; // Import the bridge
+import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "./supabaseClient";
 
 function Profile() {
   const navigate = useNavigate();
@@ -10,274 +11,249 @@ function Profile() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [filter, setFilter] = useState("all"); // 'all', 'lost', 'found'
 
-  // --- USER STATE ---
   const [userData, setUserData] = useState({
-    name: "Loading...",
-    email: "",
-    phone: "Click edit to add",
-    lostCount: 0,
-    foundCount: 0
+    name: "User", email: "", phone: "", lostCount: 0, foundCount: 0, items: []
   });
-  const [tempData, setTempData] = useState({ ...userData });
+  
+  const [tempData, setTempData] = useState({ name: "", phone: "" });
 
-  // 1. FETCH REAL USER DATA
-  useEffect(() => {
-    const fetchProfile = async () => {
+  const fetchProfileAndItems = async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { navigate("/"); return; }
 
-      if (user) {
-        // Get profile details from the 'profiles' table we created with SQL earlier
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      const { data: itemsData } = await supabase.from('items').select('*').eq('email', user.email).order('created_at', { ascending: false });
 
-        if (data) {
-          setUserData({
-            name: data.full_name || "New User",
-            email: user.email,
-            phone: data.phone || "No phone added",
-            lostCount: 0, // We can link these to real tables later!
-            foundCount: 0
-          });
-          setTempData({
-            name: data.full_name || "New User",
-            email: user.email,
-            phone: data.phone || ""
-          });
-        }
-      }
-      setLoading(false);
-    };
+      const lost = itemsData?.filter(i => i.type?.toLowerCase() === 'lost').length || 0;
+      const found = itemsData?.filter(i => i.type?.toLowerCase() === 'found').length || 0;
 
-    fetchProfile();
-  }, []);
+      const profileName = profileData?.full_name || user.user_metadata?.full_name || "Finder";
+      const profilePhone = profileData?.phone || "Not Set";
 
-  // 2. REAL SIGN OUT LOGIC
-  const confirmLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
+      setUserData({
+        name: profileName,
+        email: user.email,
+        phone: profilePhone,
+        lostCount: lost,
+        foundCount: found,
+        items: itemsData || []
+      });
+
+      setTempData({ name: profileName, phone: profilePhone === "Not Set" ? "" : profilePhone });
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    } finally { setLoading(false); }
   };
 
-  // 3. REAL SAVE DATA LOGIC
-  const handleSave = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    const { error } = await supabase
-      .from('profiles')
-      .update({ 
-        full_name: tempData.name,
-        // If you added a phone column to your table:
-        // phone: tempData.phone 
-      })
-      .eq('id', user.id);
-
-    if (error) {
-      alert("Error updating profile: " + error.message);
-    } else {
-      setUserData({ ...userData, ...tempData });
+  const handleUpdateProfile = async () => {
+    setSaveLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('profiles').upsert({ 
+        id: user.id, 
+        email: user.email, 
+        full_name: tempData.name, 
+        phone: tempData.phone,
+        updated_at: new Date() 
+      });
+      if (error) throw error;
+      setUserData(prev => ({ ...prev, name: tempData.name, phone: tempData.phone }));
       setIsEditing(false);
-    }
-  };
-
-  // --- PARTICLES & RESIZE (Keeping your existing code) ---
-  const particlesInit = useCallback(async (engine) => { await loadSlim(engine); }, []);
-  const particleOptions = {
-    fullScreen: { enable: true, zIndex: 0 },
-    fpsLimit: 120,
-    particles: {
-      color: { value: "#8FB3E2" },
-      links: { color: "#D9E1F1", distance: 180, enable: true, opacity: 0.2, width: 1 },
-      move: { enable: true, speed: 0.8 },
-      number: { density: { enable: true, area: 800 }, value: 45 },
-      opacity: { value: 0.4 },
-      shape: { type: "circle" },
-      size: { value: { min: 1, max: 3 } },
-    },
-    detectRetina: true,
+      alert("Profile updated!");
+    } catch (error) {
+      alert(error.message);
+    } finally { setSaveLoading(false); }
   };
 
   useEffect(() => {
+    fetchProfileAndItems();
     const handleResize = () => setIsMobile(window.innerWidth < 968);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [navigate]);
 
-  if (loading) return <div style={styles.container}><h2 style={{color: 'white'}}>Loading...</h2></div>;
+  const particlesInit = useCallback(async (engine) => { await loadSlim(engine); }, []);
+
+  if (loading) return <div style={styles.loadingScreen}>Initializing Profile...</div>;
+
+  // Logic to filter the list based on selection
+  const filteredItems = userData.items.filter(item => 
+    filter === "all" ? true : item.type?.toLowerCase() === filter
+  );
 
   return (
     <div style={styles.container}>
-      {/* ... (Keep your existing <style>, Particles, and Modal code exactly the same) ... */}
-      <style>
-        {`
-          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
-          .content-scroll::-webkit-scrollbar { width: 6px; }
-          .content-scroll::-webkit-scrollbar-thumb { background: #31487A; border-radius: 10px; }
-          input::placeholder { color: rgba(143, 179, 226, 0.5); }
-          button { cursor: pointer; transition: all 0.2s ease; }
-          button:hover { opacity: 0.8; transform: translateY(-1px); }
-          button:active { transform: translateY(0px); }
-          .profile-glass {
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-          }
-        `}
-      </style>
+      <style>{`
+        .glass-panel { background: rgba(30, 46, 79, 0.4); backdrop-filter: blur(25px); border: 1px solid rgba(143, 179, 226, 0.15); border-radius: 32px; }
+        .neon-border-lost { border-left: 4px solid #ff4d4d; }
+        .neon-border-found { border-left: 4px solid #4ade80; }
+        .content-scroll::-webkit-scrollbar { width: 5px; }
+        .content-scroll::-webkit-scrollbar-thumb { background: rgba(143, 179, 226, 0.2); border-radius: 10px; }
+        .item-card:hover { background: rgba(255, 255, 255, 0.05) !important; transform: translateX(5px); transition: 0.3s; }
+        .action-btn:hover { filter: brightness(1.2); transform: translateY(-2px); transition: 0.2s; }
+      `}</style>
+      
+      <Particles id="tsparticles" init={particlesInit} options={particleConfig} />
 
-      <Particles id="tsparticles" init={particlesInit} options={particleOptions} />
-
-      {showLogoutConfirm && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.confirmBox}>
-            <h3 style={{ color: "white", marginBottom: "10px" }}>Confirm Sign Out</h3>
-            <p style={{ color: "#8FB3E2", fontSize: "14px", marginBottom: "25px" }}>Are you sure you want to leave?</p>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
-              <button style={styles.cancelBtn} onClick={() => setShowLogoutConfirm(false)}>Stay</button>
-              <button style={styles.confirmBtn} onClick={confirmLogout}>Yes, Exit</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div 
-        className="profile-glass"
-        style={{
-          ...styles.dashboard,
-          flexDirection: isMobile ? "column" : "row",
-          width: isMobile ? "95%" : "1100px",
-          height: isMobile ? "auto" : "700px",
-          filter: showLogoutConfirm ? "blur(10px)" : "none",
-          pointerEvents: showLogoutConfirm ? "none" : "auto",
-        }}
-      >
-        {/* --- SIDEBAR --- */}
-        <div style={{
-          ...styles.sidebar,
-          width: isMobile ? "100%" : "320px",
-          padding: isMobile ? "25px" : "40px 30px",
-          borderRight: isMobile ? "none" : "1px solid rgba(143, 179, 226, 0.1)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "20px" : "0", flexDirection: isMobile ? "row" : "column" }}>
+      <div style={{...styles.layout, flexDirection: isMobile ? "column" : "row"}}>
+        
+        {/* LEFT SIDE: SIDEBAR */}
+        <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="glass-panel" style={styles.sidebar}>
+          <div style={styles.avatarContainer}>
+            <div style={styles.avatarGlow}></div>
             <div style={styles.avatar}>{userData.name.charAt(0)}</div>
-            <div style={{ textAlign: isMobile ? "left" : "center", width: "100%" }}>
-              {isEditing ? (
-                <input 
-                  style={styles.editInputHeader} 
-                  value={tempData.name}
-                  autoFocus
-                  onChange={(e) => setTempData({...tempData, name: e.target.value})}
-                />
-              ) : (
-                <h2 style={styles.userName}>{userData.name}</h2>
-              )}
-              
-              <div style={styles.contactList}>
-                <div style={styles.contactItem}>
-                  <span style={styles.contactLabel}>EMAIL</span>
-                  <span style={styles.contactValue}>{userData.email}</span>
-                </div>
-                <div style={styles.contactItem}>
-                  <span style={styles.contactLabel}>PHONE</span>
-                  {isEditing ? (
-                    <input style={styles.editInput} value={tempData.phone} onChange={(e) => setTempData({...tempData, phone: e.target.value})} />
-                  ) : (
-                    <span style={styles.contactValue}>{userData.phone}</span>
-                  )}
-                </div>
-              </div>
+          </div>
+
+          {isEditing ? (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px' }}>
+              <input style={styles.editInput} value={tempData.name} onChange={(e) => setTempData({...tempData, name: e.target.value})} />
+              <input style={styles.editInput} value={tempData.phone} onChange={(e) => setTempData({...tempData, phone: e.target.value})} />
+            </div>
+          ) : (
+            <>
+              <h2 style={styles.userName}>{userData.name}</h2>
+              <p style={styles.userPhone}>📞 {userData.phone}</p>
+            </>
+          )}
+          <p style={styles.userEmail}>{userData.email}</p>
+
+          <div style={styles.statsGrid}>
+            <div style={styles.statCard} onClick={() => setFilter("lost")}>
+              <span style={styles.statVal}>{userData.lostCount}</span>
+              <span style={styles.statLab}>LOST</span>
+            </div>
+            <div style={styles.statCard} onClick={() => setFilter("found")}>
+              <span style={styles.statVal}>{userData.foundCount}</span>
+              <span style={styles.statLab}>FOUND</span>
             </div>
           </div>
 
-          <div style={styles.statsRow}>
-            <div style={styles.statBox}><p style={styles.statNum}>{userData.lostCount}</p><p style={styles.statSub}>Lost</p></div>
-            <div style={styles.statBox}><p style={styles.statNum}>{userData.foundCount}</p><p style={styles.statSub}>Found</p></div>
-          </div>
-
-          <div style={{ display: "flex", gap: "10px", width: "100%", marginTop: "auto" }}>
+          <div style={styles.sidebarActions}>
             {isEditing ? (
-              <>
-                <button style={styles.cancelBtnSmall} onClick={() => setIsEditing(false)}>Cancel</button>
-                <button style={styles.saveBtnSmall} onClick={handleSave}>Save</button>
-              </>
+              <button onClick={handleUpdateProfile} style={styles.saveBtn} disabled={saveLoading}>{saveLoading ? "..." : "Save"}</button>
             ) : (
-              <>
-                <button style={styles.editBtn} onClick={() => setIsEditing(true)}>Edit Profile</button>
-                <button style={styles.logoutBtn} onClick={() => setShowLogoutConfirm(true)}>Exit</button>
-              </>
+              <button onClick={() => setIsEditing(true)} style={styles.secondaryBtn}>Edit Profile</button>
             )}
+            <button onClick={() => isEditing ? setIsEditing(false) : setShowLogoutConfirm(true)} style={styles.dangerBtn}>
+              {isEditing ? "Cancel" : "Logout"}
+            </button>
           </div>
-        </div>
+        </motion.div>
 
-        {/* --- CONTENT AREA (Keep your Activity/ItemRow sections exactly the same) --- */}
-        <div className="content-scroll" style={{ ...styles.content, padding: isMobile ? "25px" : "50px" }}>
-           <header style={{ ...styles.header, flexDirection: isMobile ? "column" : "row", gap: "20px" }}>
-             <div>
-               <h1 style={styles.welcomeText}>My Activity</h1>
-               <p style={styles.subtitle}>Track items & matches</p>
-             </div>
-           </header>
-           {/* ...rest of your content section... */}
-           <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
-            <section>
-              <h3 style={styles.sectionTitle}>Your Lost Reports</h3>
-              <div style={styles.itemTable}>
-                <ItemRow title="iPhone 15 Pro" tag="Tech" status="Scanning Grid" color="#8FB3E2" />
-                <ItemRow title="Blue Wallet" tag="Personal" status="2 Matches Found" color="#4ade80" />
+        {/* RIGHT SIDE: ACTIVITY FEED */}
+        <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="glass-panel" style={styles.mainFeed}>
+          
+          {/* HEADER WITH TOP-RIGHT BUTTONS */}
+          <div style={styles.feedHeader}>
+            <div>
+              <h1 style={styles.title}>Activity <span style={{color: '#8FB3E2'}}>Log</span></h1>
+              <div style={styles.filterBar}>
+                {['all', 'lost', 'found'].map(t => (
+                  <span key={t} onClick={() => setFilter(t)} style={{...styles.filterTab, color: filter === t ? '#8FB3E2' : '#555'}}>{t.toUpperCase()}</span>
+                ))}
               </div>
-            </section>
+            </div>
+
+            {/* TOP RIGHT ACTION BUTTONS */}
+            <div style={styles.topRightActions}>
+              <Link to="/lost" style={{textDecoration: 'none'}}>
+                <button className="action-btn" style={{...styles.actionBtn, background: 'rgba(255, 77, 77, 0.15)', color: '#ff4d4d', border: '1px solid #ff4d4d'}}>+ Lost Item</button>
+              </Link>
+              <Link to="/found" style={{textDecoration: 'none'}}>
+                <button className="action-btn" style={{...styles.actionBtn, background: 'rgba(74, 222, 128, 0.15)', color: '#4ade80', border: '1px solid #4ade80'}}>+ Found Item</button>
+              </Link>
+            </div>
           </div>
-        </div>
+
+          <div className="content-scroll" style={styles.scrollArea}>
+            {filteredItems.map((item, idx) => (
+              <motion.div key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`item-card ${item.type === 'lost' ? "neon-border-lost" : "neon-border-found"}`} style={styles.itemCard}>
+                <div style={{...styles.iconCircle, color: item.type === 'lost' ? '#ff4d4d' : '#4ade80'}}>
+                  {item.type === 'lost' ? '🔍' : '🎁'}
+                </div>
+                <div style={{flex: 1, marginLeft: '15px'}}>
+                  <h4 style={styles.itemTitle}>{item.description}</h4>
+                  <p style={styles.itemMeta}>📅 {new Date(item.created_at).toLocaleDateString()} • {item.location || 'N/A'}</p>
+                </div>
+                <div style={{...styles.typeBadge, color: item.type === 'lost' ? '#ff4d4d' : '#4ade80'}}>{item.type.toUpperCase()}</div>
+              </motion.div>
+            ))}
+            {filteredItems.length === 0 && <p style={styles.empty}>No {filter} items found.</p>}
+          </div>
+        </motion.div>
       </div>
+
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={styles.overlay}>
+            <div className="glass-panel" style={styles.modal}>
+              <h3 style={{color: 'white'}}>Confirm Logout?</h3>
+              <div style={styles.modalBtns}>
+                <button style={styles.secondaryBtn} onClick={() => setShowLogoutConfirm(false)}>Stay</button>
+                <button style={styles.confirmBtn} onClick={async () => { await supabase.auth.signOut(); navigate("/"); }}>Logout</button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-// ... (Keep your ItemRow and styles object exactly as they were) ...
-const ItemRow = ({ title, tag, status, color }) => (
-  <div style={styles.tableRow}>
-    <div style={{ display: "flex", flexDirection: "column", flex: 2 }}>
-      <span style={styles.itemMain}>{title}</span>
-      <span style={{ color, fontSize: "11px", fontWeight: "bold" }}>{status}</span>
-    </div>
-    <span style={styles.itemTag}>{tag}</span>
-  </div>
-);
+// Particle & Style objects remain below
+const particleConfig = {
+  fullScreen: { enable: true, zIndex: 0 },
+  particles: {
+    number: { value: 40 },
+    color: { value: "#8FB3E2" },
+    links: { enable: true, opacity: 0.1, distance: 150 },
+    move: { enable: true, speed: 0.6 },
+    size: { value: { min: 1, max: 2 } }
+  }
+};
 
 const styles = {
-  // ... Paste your existing styles object here ...
-  container: { height: "100vh", width: "100vw", backgroundColor: "#0f172a", display: "flex", justifyContent: "center", alignItems: "center", fontFamily: "'Inter', sans-serif", position: "relative", overflow: "hidden" },
-  modalOverlay: { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.85)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999 },
-  confirmBox: { backgroundColor: "#192338", padding: "40px", borderRadius: "24px", textAlign: "center", border: "1px solid rgba(143, 179, 226, 0.3)", boxShadow: "0 25px 50px rgba(0,0,0,0.5)", width: "350px" },
-  dashboard: { display: "flex", backgroundColor: "rgba(25, 35, 56, 0.6)", borderRadius: "32px", zIndex: 10, boxShadow: "0 40px 80px rgba(0,0,0,0.7)", overflow: "hidden", border: "1px solid rgba(143, 179, 226, 0.15)", transition: "all 0.3s ease" },
-  sidebar: { background: "rgba(30, 46, 79, 0.3)", display: "flex", flexDirection: "column" },
-  avatar: { width: "80px", height: "80px", borderRadius: "20px", backgroundColor: "#8FB3E2", color: "#192338", fontSize: "28px", fontWeight: "900", display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "20px", alignSelf: 'center' },
-  userName: { color: "white", fontSize: "22px", fontWeight: "800", margin: "0 0 15px 0" },
-  contactList: { display: "flex", flexDirection: "column", gap: "15px", marginTop: "10px", textAlign: 'left' },
-  contactItem: { display: "flex", flexDirection: "column" },
-  contactLabel: { color: "#8FB3E2", fontSize: "9px", fontWeight: "900", letterSpacing: "1px" },
-  contactValue: { color: "#D9E1F1", fontSize: "14px" },
-  statsRow: { display: "flex", gap: "12px", margin: "30px 0" },
-  statBox: { flex: 1, background: "rgba(143, 179, 226, 0.05)", padding: "15px", borderRadius: "16px", textAlign: "center", border: "1px solid rgba(143, 179, 226, 0.1)" },
-  statNum: { color: "white", fontSize: "22px", fontWeight: "900", margin: 0 },
-  statSub: { color: "#8FB3E2", fontSize: "11px", margin: 0, fontWeight: '700' },
-  editBtn: { flex: 2, padding: "14px", borderRadius: "14px", border: "none", background: "#31487A", color: "white", fontWeight: "700", cursor: "pointer" },
-  logoutBtn: { flex: 1, padding: "14px", borderRadius: "14px", border: "1px solid rgba(255, 77, 77, 0.3)", background: "transparent", color: "#ff4d4d", fontWeight: "700", cursor: "pointer" },
-  confirmBtn: { padding: "12px 25px", borderRadius: "12px", border: "none", background: "#ff4d4d", color: "white", fontWeight: "800" },
-  cancelBtn: { padding: "12px 25px", borderRadius: "12px", border: "1px solid #8FB3E2", background: "transparent", color: "#8FB3E2", fontWeight: "800" },
-  cancelBtnSmall: { flex: 1, padding: "12px", borderRadius: "12px", border: "1px solid #8FB3E2", background: "transparent", color: "#8FB3E2", fontWeight: "700" },
-  saveBtnSmall: { flex: 1, padding: "12px", borderRadius: "12px", border: "none", background: "#8FB3E2", color: "#192338", fontWeight: "800" },
-  editInput: { background: "rgba(255,255,255,0.05)", border: "1px solid #8FB3E2", borderRadius: "8px", color: "white", padding: "8px 12px", fontSize: "13px", outline: "none", width: "100%" },
-  editInputHeader: { background: "rgba(255,255,255,0.05)", border: "1px solid #8FB3E2", borderRadius: "10px", color: "white", fontSize: "20px", fontWeight: "800", padding: "10px", textAlign: "center", width: "100%", marginBottom: "15px" },
-  content: { flex: 1, overflowY: "auto" },
-  welcomeText: { color: "white", fontSize: "32px", fontWeight: "900", margin: 0 },
-  subtitle: { color: "#8FB3E2", opacity: 0.8, fontSize: "15px" },
-  sectionTitle: { color: "white", fontSize: "14px", fontWeight: '700', marginBottom: "20px", opacity: 0.6, textTransform: 'uppercase', letterSpacing: '1px' },
-  itemTable: { display: "flex", flexDirection: "column", gap: "15px" },
-  tableRow: { background: "rgba(255,255,255,0.03)", padding: "20px", borderRadius: "20px", display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid rgba(143, 179, 226, 0.05)" },
-  itemMain: { color: "white", fontWeight: "700", fontSize: "16px" },
-  itemTag: { color: "#8FB3E2", background: "rgba(143, 179, 226, 0.1)", padding: "6px 12px", borderRadius: "8px", fontSize: "11px", fontWeight: '800' },
+  container: { height: "100vh", width: "100vw", background: "#0D1117", display: "flex", justifyContent: "center", alignItems: "center", overflow: "hidden", fontFamily: "'Inter', sans-serif" },
+  layout: { display: "flex", gap: "25px", width: "95%", maxWidth: "1200px", height: "85vh", zIndex: 10 },
+  loadingScreen: { height: '100vh', width: '100vw', background: '#0D1117', color: 'white', display: 'flex', justifyContent: 'center', alignItems: 'center' },
+  sidebar: { flex: 1, padding: "40px", display: "flex", flexDirection: "column", alignItems: "center" },
+  avatarContainer: { position: "relative", marginBottom: "20px" },
+  avatar: { width: "100px", height: "100px", borderRadius: "30px", background: "linear-gradient(45deg, #1E2E4F, #31487A)", fontSize: "40px", fontWeight: "900", display: "flex", justifyContent: "center", alignItems: "center", color: "white" },
+  avatarGlow: { position: "absolute", inset: "-10px", background: "rgba(143,179,226,0.1)", filter: "blur(20px)", borderRadius: "50%" },
+  userName: { fontSize: "24px", color: "white", margin: "10px 0 5px" },
+  userPhone: { fontSize: "14px", color: "#8FB3E2" },
+  userEmail: { fontSize: "12px", color: "rgba(143,179,226,0.3)", marginBottom: "30px" },
+  editInput: { width: "100%", padding: "10px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid #31487A", color: "white" },
+  statsGrid: { display: "flex", gap: "10px", width: "100%", marginBottom: "20px" },
+  statCard: { flex: 1, padding: "15px", background: "rgba(255,255,255,0.03)", borderRadius: "15px", textAlign: "center", cursor: 'pointer' },
+  statVal: { display: "block", fontSize: "22px", fontWeight: "900", color: "white" },
+  statLab: { fontSize: "10px", color: "#8FB3E2" },
+  mainFeed: { flex: 2.5, padding: "40px", display: "flex", flexDirection: "column", position: 'relative' },
+  feedHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "30px" },
+  title: { fontSize: "32px", color: "white", fontWeight: "900", margin: 0 },
+  filterBar: { display: 'flex', gap: '15px', marginTop: '10px' },
+  filterTab: { fontSize: '11px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px' },
+  topRightActions: { display: 'flex', gap: '10px' },
+  actionBtn: { padding: '10px 18px', borderRadius: '12px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' },
+  scrollArea: { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" },
+  itemCard: { background: "rgba(255, 255, 255, 0.02)", padding: "15px 20px", borderRadius: "20px", display: "flex", alignItems: "center" },
+  iconCircle: { width: "40px", height: "40px", borderRadius: "12px", background: "rgba(255,255,255,0.05)", display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '18px' },
+  itemTitle: { color: "white", fontSize: "16px", margin: 0 },
+  itemMeta: { color: "rgba(143,179,226,0.4)", fontSize: "11px", margin: "4px 0 0" },
+  typeBadge: { fontWeight: "900", fontSize: "10px" },
+  sidebarActions: { width: "100%", display: "flex", flexDirection: "column", gap: "10px" },
+  saveBtn: { background: "#8FB3E2", color: "#0D1117", padding: "12px", borderRadius: "12px", border: 'none', fontWeight: '800' },
+  secondaryBtn: { background: "rgba(143,179,226,0.1)", color: "#8FB3E2", padding: "12px", borderRadius: "12px", border: '1px solid rgba(143,179,226,0.2)', fontWeight: '800' },
+  dangerBtn: { color: "#ff4d4d", background: 'transparent', border: 'none', padding: "10px", cursor: 'pointer' },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 },
+  modal: { padding: "30px", width: "300px", textAlign: 'center' },
+  modalBtns: { display: 'flex', gap: '10px', marginTop: '20px' },
+  confirmBtn: { background: '#ff4d4d', color: 'white', border: 'none', flex: 1, padding: '10px', borderRadius: '10px', fontWeight: '800' },
+  empty: { textAlign: 'center', color: '#555', marginTop: '40px' }
 };
 
 export default Profile;
