@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-// These lines pull the secret keys from your .env file
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Use the same keys we used for the Python backend
+const supabaseUrl = "https://wakzkwlxeeeucrkmyxrc.supabase.co"
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indha3prd2x4ZWVldWNya215eHJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNDUwOTEsImV4cCI6MjA4ODcyMTA5MX0.VdTtthd2jw3DjRIpoMaAampJ9WtteuL1jpAkzqK3WDw"
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseKey)

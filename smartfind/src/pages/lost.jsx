@@ -69,30 +69,59 @@ const Lost = () => {
 
   const submitToSupabase = async () => {
     try {
-      const { data, error } = await supabase
-        .from('items')
-        .insert([
-          { 
-            title: formData.title,
-            type: formData.type,
-            color: formData.color,
-            location: formData.location,
-            time: formData.time,
-            status: 'lost' 
-          }
-        ]);
+      // 1. Prepare the data for the Python AI Backend
+      const formDataToSend = new FormData();
+      
+      // Combine details into one description string for the AI to read
+      const combinedDescription = `${formData.title} - ${formData.color} - ${formData.location}`;
+      formDataToSend.append("description", combinedDescription);
+      
+      // Set type to 'lost' so the AI looks for 'found' matches
+      formDataToSend.append("type", "lost");
 
-      if (error) throw error;
-      nextStep(); 
+      // 2. Get real user email from Supabase Auth
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        alert("Please log in first. We need your email to alert you when your item is found!");
+        return;
+      }
+
+      formDataToSend.append("email", user.email);
+
+      if (formData.image) {
+        formDataToSend.append("image", formData.image);
+      }
+
+      // 3. Send to your Python Backend (Uvicorn)
+      const response = await fetch("http://127.0.0.1:8000/upload", {
+        method: "POST",
+        body: formDataToSend,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        console.log("AI Backend Response:", result);
+        
+        // If an immediate match was found in the database
+        if (result.status === "item_found") {
+          alert(`🎉 AI MATCH FOUND! A similar item was previously reported. Check your email for details from: ${result.match_details.email}`);
+        }
+        
+        nextStep(); // Move to the "Search Active" success screen
+      } else {
+        throw new Error(result.message || "Failed to connect to AI server");
+      }
+
     } catch (error) {
-      console.error("Database Error:", error.message);
-      alert("Submission failed: " + error.message);
+      console.error("Connection Error:", error.message);
+      alert("AI Sync Failed: Make sure your Python backend is running at http://127.0.0.1:8000");
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 relative overflow-hidden">
-      {/* Background Particles Layer */}
       <Particles id="tsparticles" init={particlesInit} options={particleOptions} />
 
       <AnimatePresence mode="wait">

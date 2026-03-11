@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Particles from "react-tsparticles";
 import { loadSlim } from "tsparticles-slim";
-import { supabase } from "./supabaseClient"; // Make sure this path is correct!
+import { supabase } from "./supabaseClient"; // Ensure this matches your file structure!
 
-const Auth = () => {
+const Login = () => {
   const [active, setActive] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 850);
   const [loading, setLoading] = useState(false);
@@ -46,7 +46,7 @@ const Auth = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // --- UPDATED SUBMIT LOGIC ---
+  // --- SUBMIT LOGIC ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -78,6 +78,7 @@ const Auth = () => {
       if (error) {
         alert(error.message);
       } else {
+        // Redirect to /home after successful login
         navigate("/home");
       }
     }
@@ -238,7 +239,6 @@ const Auth = () => {
   );
 };
 
-// ... keep your existing styles object below this ...
 const styles = {
   container: {
     height: "100vh",
@@ -371,4 +371,4 @@ const styles = {
   },
 };
 
-export default Auth;
+export default Login;
