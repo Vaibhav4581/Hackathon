@@ -100,20 +100,22 @@ async def upload_item(
 
     if items:
         for item in items:
-            if file_path and item.get("image_path"):
-                try:
-                    score = final_similarity(
-                        description,
-                        item["description"],
-                        file_path,
-                        item["image_path"]
-                    )
-                    score = float(score)
-                    if score > best_score:
-                        best_score = score
-                        best_match = item
-                except Exception as e:
-                    print(f"Matching error for item {item.get('id')}: {e}")
+            try:
+                score = final_similarity(
+                    description,
+                    item["description"],
+                    file_path,
+                    item.get("image_path")
+                )
+
+                score = float(score)
+
+                if score > best_score:
+                    best_score = score
+                    best_match = item
+
+            except Exception as e:
+                print(f"Matching error for item {item.get('id')}: {e}")
 
     if best_score > 0.75 and best_match:
         first_uploader_email = best_match.get("email")

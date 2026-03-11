@@ -20,7 +20,11 @@ const Typewriter = ({ text, speed = 40 }) => {
 };
 
 const Lost = () => {
+  // --- STATES ---
   const [step, setStep] = useState(0);
+  const [matchData, setMatchData] = useState(null);
+  const [showMatchScreen, setShowMatchScreen] = useState(false);
+  const [newlyCreatedId, setNewlyCreatedId] = useState(null); // Tracks current report ID
   const [formData, setFormData] = useState({
     title: "",
     type: "Electronics",
@@ -63,37 +67,31 @@ const Lost = () => {
     { id: "time", label: "Approximate Time Lost", type: "time", name: "time" },
   ];
 
+  // Progress Calculation
+  const progressPercentage = ((step) / questions.length) * 100;
+
   const generateSummary = () => {
     return `Initiating search for a ${formData.color.toLowerCase()} ${formData.title.toLowerCase()} last seen at ${formData.location}. Cross-referencing campus grid database...`;
   };
 
   const submitToSupabase = async () => {
     try {
-      // 1. Prepare the data for the Python AI Backend
       const formDataToSend = new FormData();
-      
-      // Combine details into one description string for the AI to read
       const combinedDescription = `${formData.title} - ${formData.color} - ${formData.location}`;
       formDataToSend.append("description", combinedDescription);
-      
-      // Set type to 'lost' so the AI looks for 'found' matches
       formDataToSend.append("type", "lost");
 
-      // 2. Get real user email from Supabase Auth
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
-        alert("Please log in first. We need your email to alert you when your item is found!");
+        alert("Please log in first.");
         return;
       }
 
       formDataToSend.append("email", user.email);
-
       if (formData.image) {
         formDataToSend.append("image", formData.image);
       }
 
-      // 3. Send to your Python Backend (Uvicorn)
       const response = await fetch("http://127.0.0.1:8000/upload", {
         method: "POST",
         body: formDataToSend,
@@ -102,27 +100,98 @@ const Lost = () => {
       const result = await response.json();
 
       if (response.ok) {
-        console.log("AI Backend Response:", result);
-        
-        // If an immediate match was found in the database
+        // CAPTURE THE NEW ID
+        setNewlyCreatedId(result.id);
+
         if (result.status === "item_found") {
-          alert(`🎉 AI MATCH FOUND! A similar item was previously reported. Check your email for details from: ${result.match_details.email}`);
+          setMatchData(result.match_details);
+          setShowMatchScreen(true);
+        } else {
+          nextStep(); 
         }
-        
-        nextStep(); // Move to the "Search Active" success screen
       } else {
         throw new Error(result.message || "Failed to connect to AI server");
       }
-
     } catch (error) {
       console.error("Connection Error:", error.message);
-      alert("AI Sync Failed: Make sure your Python backend is running at http://127.0.0.1:8000");
+      alert("AI Sync Failed: Make sure your Python backend is running.");
     }
   };
+
+  // --- DATABASE CLEANUP LOGIC ---
+  const handleMatchCleanup = async () => {
+    const idsToDelete = [];
+    if (matchData?.id) idsToDelete.push(matchData.id);
+    if (newlyCreatedId) idsToDelete.push(newlyCreatedId);
+
+    if (idsToDelete.length > 0) {
+      await supabase.from("items").delete().in("id", idsToDelete);
+    }
+    // REDIRECT TO HOME
+    window.location.href = "/home";
+  };
+
+  // --- MATCH OVERLAY COMPONENT ---
+  const MatchOverlay = () => (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      className="fixed inset-0 z-[100] bg-[#192338]/95 backdrop-blur-xl flex items-center justify-center p-6"
+    >
+      <div className="glass-card max-w-2xl w-full p-10 border-2 border-[#8FB3E2] shadow-[0_0_50px_rgba(143,179,226,0.3)] text-center relative overflow-hidden">
+        <div className="relative z-10">
+          <span className="text-[#8FB3E2] font-black tracking-[0.5em] uppercase text-xs">AI Match Protocol Active</span>
+          <h2 className="text-4xl font-black text-white mt-4 mb-2 tracking-tighter uppercase italic">We Found a Match!</h2>
+          <p className="text-[#D9E1F1]/60 italic mb-8 text-sm">Our neural network matched these reports. Both will be removed from the grid.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10 text-left">
+            <div className="space-y-3">
+              <p className="text-[#8FB3E2] text-[10px] font-bold uppercase tracking-widest">Your Lost Report</p>
+              <div className="h-40 rounded-2xl bg-[#1E2E4F] border border-[#8FB3E2]/10 overflow-hidden">
+                 {formData.image ? (
+                   <img src={URL.createObjectURL(formData.image)} className="w-full h-full object-cover" alt="your item" />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">📷</div>
+                 )}
+              </div>
+              <p className="text-white text-xs font-bold truncate">{formData.title}</p>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-[#8FB3E2] text-[10px] font-bold uppercase tracking-widest">Matched Entry</p>
+              <div className="h-40 rounded-2xl bg-[#1E2E4F] border border-[#8FB3E2]/10 overflow-hidden">
+                 {matchData?.image_path ? (
+                   <img src={`http://127.0.0.1:8000/${matchData.image_path}`} className="w-full h-full object-cover" alt="matched item" />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center text-3xl opacity-20">📡</div>
+                 )}
+              </div>
+              <p className="text-white text-xs font-bold truncate">{matchData?.description?.split(" - ")[0] || "Found Item"}</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <p className="text-[#D9E1F1] text-xs leading-relaxed">
+              Handshake notification broadcasted to: <br/>
+              <span className="text-[#8FB3E2] font-mono font-bold">{matchData?.email}</span>
+            </p>
+            <button 
+              onClick={handleMatchCleanup}
+              className="bg-[#8FB3E2] text-[#192338] px-10 py-3 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform text-xs"
+            >
+              Resolve & Clear Both from Grid
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4 relative overflow-hidden">
       <Particles id="tsparticles" init={particlesInit} options={particleOptions} />
+      
+      {showMatchScreen && <MatchOverlay />}
 
       <AnimatePresence mode="wait">
         {step < questions.length ? (
@@ -131,59 +200,54 @@ const Lost = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="glass-card w-full max-w-lg p-10 text-center relative z-10"
+            className="glass-card w-full max-w-lg p-10 text-center relative z-10 overflow-hidden"
           >
-            {step > 0 && (
-              <button onClick={prevStep} className="absolute top-6 left-6 text-[#8FB3E2] text-xs font-bold uppercase tracking-widest hover:text-[#D9E1F1] transition-colors">← Back</button>
-            )}
+            {/* PROGRESS BAR */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-[#8FB3E2]/10">
+              <motion.div initial={{ width: 0 }} animate={{ width: `${progressPercentage}%` }} className="h-full bg-[#8FB3E2] shadow-[0_0_15px_#8FB3E2]" />
+            </div>
+
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[#8FB3E2] text-[10px] font-black tracking-widest uppercase">Step {step + 1} of {questions.length}</span>
+              {step > 0 && <button onClick={prevStep} className="text-[#8FB3E2]/40 text-[10px] font-bold uppercase tracking-widest hover:text-[#D9E1F1] transition-colors">← Back</button>}
+            </div>
+
             <h2 className="text-2xl font-bold text-[#D9E1F1] mb-8">{questions[step].label}</h2>
 
             {questions[step].type === "file" ? (
               <div className="space-y-4">
                 <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-[#8FB3E2]/20 rounded-2xl cursor-pointer hover:bg-[#8FB3E2]/5 transition-all">
                   <span className="text-[#8FB3E2] text-xs font-bold uppercase tracking-widest">Select Image</span>
-                  <input type="file" className="hidden" onChange={(e) => {
-                    setFormData({ ...formData, image: e.target.files[0] });
-                    nextStep();
-                  }} />
+                  <input type="file" className="hidden" onChange={(e) => { if(e.target.files[0]) { setFormData({ ...formData, image: e.target.files[0] }); nextStep(); } }} />
                 </label>
-                <button onClick={nextStep} className="text-[#D9E1F1]/40 text-xs font-bold uppercase tracking-widest hover:text-[#8FB3E2] transition-colors">Skip for now</button>
+                <button onClick={nextStep} className="text-[#D9E1F1]/40 text-xs font-bold uppercase tracking-widest hover:text-[#8FB3E2] transition-colors">Skip (Enter)</button>
               </div>
             ) : questions[step].type === "select" ? (
               <div className="space-y-6 text-center">
-                <select className="w-full bg-[#1E2E4F] border-2 border-[#31487A] p-4 rounded-xl text-[#D9E1F1] outline-none text-center appearance-none"
-                  value={formData[questions[step].name]}
-                  onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })}>
+                <select autoFocus className="w-full bg-[#1E2E4F] border-2 border-[#31487A] p-4 rounded-xl text-[#D9E1F1] outline-none text-center appearance-none" value={formData[questions[step].name]} onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && nextStep()}>
                   {questions[step].options.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
-                <button onClick={nextStep} className="bg-[#8FB3E2] text-[#192338] px-12 py-3 rounded-full font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-transform">Next</button>
+                <button onClick={nextStep} className="bg-[#8FB3E2] text-[#192338] px-12 py-3 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform">Next</button>
               </div>
             ) : (
               <div className="space-y-6">
-                <input autoFocus type={questions[step].type} placeholder={questions[step].placeholder} 
-                  className="w-full bg-transparent border-b-2 border-[#8FB3E2]/30 p-4 text-[#D9E1F1] outline-none text-xl text-center focus:border-[#8FB3E2] transition-colors"
-                  value={formData[questions[step].name]}
-                  onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })}
-                  onKeyDown={(e) => e.key === "Enter" && nextStep()} />
+                <input autoFocus type={questions[step].type} placeholder={questions[step].placeholder} className="w-full bg-transparent border-b-2 border-[#8FB3E2]/30 p-4 text-[#D9E1F1] outline-none text-xl text-center focus:border-[#8FB3E2] transition-colors" value={formData[questions[step].name]} onChange={(e) => setFormData({ ...formData, [questions[step].name]: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); nextStep(); } }} />
                 <button onClick={nextStep} className="bg-[#8FB3E2] text-[#192338] px-12 py-3 rounded-full font-black uppercase tracking-widest hover:scale-105 transition-transform">Next</button>
               </div>
             )}
           </motion.div>
         ) : step === questions.length ? (
-          <motion.div key="summary-step" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card w-full max-w-lg p-12 text-center border-2 border-[#8FB3E2]/20 z-10">
+          <motion.div key="summary-step" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="glass-card w-full max-w-lg p-12 text-center border-2 border-[#8FB3E2]/20 z-10 overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-[#8FB3E2] shadow-[0_0_15px_#8FB3E2]" />
             <div className="flex items-center justify-center gap-2 mb-6">
               <div className="h-2 w-2 rounded-full bg-[#8FB3E2] animate-pulse" />
-              <span className="text-[#8FB3E2] text-xs font-bold uppercase tracking-widest">AI Grid Searching...</span>
+              <span className="text-[#8FB3E2] text-xs font-bold uppercase tracking-widest">AI Grid Finalizing</span>
             </div>
-            <div className="min-h-[100px] flex items-center justify-center">
-              <h3 className="text-xl italic font-medium text-[#D9E1F1] leading-relaxed">
+            <div className="min-h-[100px] flex items-center justify-center text-xl italic font-medium text-[#D9E1F1] leading-relaxed">
                 "<Typewriter text={generateSummary()} />"
-              </h3>
             </div>
             <div className="mt-8 space-y-4">
-              <button onClick={submitToSupabase} className="w-full bg-[#8FB3E2] text-[#192338] py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#D9E1F1] transition-all shadow-xl shadow-[#8FB3E2]/20">
-                Broadcast Search
-              </button>
+              <button onClick={submitToSupabase} onKeyDown={(e) => e.key === "Enter" && submitToSupabase()} className="w-full bg-[#8FB3E2] text-[#192338] py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-[#D9E1F1] transition-all shadow-xl shadow-[#8FB3E2]/20">Broadcast Search</button>
               <button onClick={() => setStep(1)} className="text-[#D9E1F1]/40 text-xs font-bold uppercase tracking-widest hover:text-[#8FB3E2] transition-colors">Edit details</button>
             </div>
           </motion.div>
@@ -195,7 +259,8 @@ const Lost = () => {
             </div>
             <h2 className="text-2xl font-black text-[#D9E1F1] mb-4 uppercase tracking-tighter">Search Active</h2>
             <p className="text-[#8FB3E2] font-bold italic mb-8">"Your report is now live. We will alert you immediately upon a potential match."</p>
-            <button onClick={() => window.location.href = "/"} className="text-[#D9E1F1]/50 text-xs uppercase font-bold border-b border-[#D9E1F1]/20 pb-1 hover:text-[#8FB3E2] transition-colors">Return to Dashboard</button>
+            {/* REDIRECT TO HOME */}
+            <button onClick={() => window.location.href = "/home"} className="text-[#D9E1F1]/50 text-xs uppercase font-bold border-b border-[#D9E1F1]/20 pb-1 hover:text-[#8FB3E2] transition-colors">Return to Dashboard</button>
           </motion.div>
         )}
       </AnimatePresence>
